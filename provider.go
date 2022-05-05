@@ -10,30 +10,30 @@ import (
 )
 
 var once sync.Once
-var defaultProvider *DefaultProvider
-var provider *ConsulProvider
+var simpleProvider *SimpleProvider
+var consulProvider *ConsulProvider
 
 type Provider interface {
 	GetWorkerId() (int64, error)
 }
 
-type DefaultProvider struct {
+type SimpleProvider struct {
 	workerId int64
 }
 
-func getDefaultProvider(workerId int64) *DefaultProvider {
+func getSimpleProvider(workerId int64) *SimpleProvider {
 	if workerId < 0 || workerId > maxWorkerId {
 		panic(fmt.Sprintf("workerId must beetwen 0 and %d", maxWorkerId))
 	}
 	once.Do(func() {
-		defaultProvider = &DefaultProvider{
+		simpleProvider = &SimpleProvider{
 			workerId: workerId,
 		}
 	})
-	return defaultProvider
+	return simpleProvider
 }
 
-func (p *DefaultProvider) GetWorkerId() (int64, error) {
+func (p *SimpleProvider) GetWorkerId() (int64, error) {
 	return p.workerId, nil
 }
 
@@ -41,16 +41,16 @@ func getConsulProvider(Address string, keyPrefix string) *ConsulProvider {
 	once.Do(func() {
 		leaderCh := make(chan struct{}, 1)
 		leaderCh <- struct{}{} // used by start
-		provider = &ConsulProvider{
+		consulProvider = &ConsulProvider{
 			Address:   Address,
 			keyPrefix: keyPrefix,
 			stopCh:    make(<-chan struct{}),
 			leaderCh:  leaderCh,
 			state:     unavailable,
 		}
-		go provider.start()
+		go consulProvider.start()
 	})
-	return provider
+	return consulProvider
 }
 
 type state int64
@@ -71,75 +71,41 @@ type ConsulProvider struct {
 }
 
 func (p *ConsulProvider) GetWorkerId() (int64, error) {
-	if p.getState() == unavailable {
-		return 0, fmt.Errorf("provider is unavailable")
+	if p.state == unavailable {
+		return 0, fmt.Errorf("consulProvider is unavailable")
 	} else {
-		return p.getWorkerId(), nil
+		return p.workerId, nil
 	}
-}
-
-func (p *ConsulProvider) getLeaderCh() <-chan struct{} {
-	p.Lock()
-	defer p.Unlock()
-	return p.leaderCh
-}
-
-func (p *ConsulProvider) setLeaderCh(leaderCh <-chan struct{}) {
-	p.Lock()
-	defer p.Unlock()
-	p.leaderCh = leaderCh
-}
-
-func (p *ConsulProvider) getWorkerId() int64 {
-	p.Lock()
-	defer p.Unlock()
-	return p.workerId
-}
-
-func (p *ConsulProvider) setWorkerId(workerId int64) {
-	p.Lock()
-	defer p.Unlock()
-	p.workerId = workerId
-}
-
-func (p *ConsulProvider) getState() state {
-	p.Lock()
-	defer p.Unlock()
-	return p.state
-}
-
-func (p *ConsulProvider) setState(state state) {
-	p.Lock()
-	defer p.Unlock()
-	p.state = state
 }
 
 func (p *ConsulProvider) start() {
 	for {
 		select {
-		case <-p.getLeaderCh():
-			p.setState(unavailable)
-			c, _ := api.NewClient(api.DefaultConfig())
+		case <-p.leaderCh:
+			p.state = unavailable
+			config := api.DefaultConfig()
+			config.Address = p.Address
+			c, _ := api.NewClient(config)
 			var workerId int64
 			for ; workerId <= maxWorkerId; workerId++ {
 				lockOptions := &api.LockOptions{
-					Key:          fmt.Sprintf("%s%s", p.keyPrefix, strconv.FormatInt(workerId, 10)),
+					Key:          p.keyPrefix + strconv.FormatInt(workerId, 10),
 					LockTryOnce:  true,
 					LockWaitTime: time.Millisecond,
 				}
 				lock, _ := c.LockOpts(lockOptions)
 				ch, err := lock.Lock(p.stopCh)
 				if ch != nil && err == nil {
-					p.setLeaderCh(ch)
-					p.setWorkerId(workerId)
-					p.setState(available)
+					p.leaderCh = ch
+					p.workerId = workerId
+					p.state = available
 					break
 				} else {
 					log.Println("create lock error", err)
 					if workerId == maxWorkerId {
 						leaderCh := make(chan struct{}, 1)
 						leaderCh <- struct{}{}
-						p.setLeaderCh(leaderCh)
+						p.leaderCh = leaderCh
 					}
 				}
 				time.Sleep(3 * time.Second)

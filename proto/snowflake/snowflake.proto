@@ -1,0 +1,18 @@
+syntax = "proto3";
+package seayoo.snowflake;
+option go_package = "git.shiyou.kingsoft.com/sdk/snowflake-service;snowflake";
+import "google/api/annotations.proto";
+
+service Snowflake {
+  rpc Generate (GenerateRequest) returns (GenerateResponse) {
+    option (google.api.http) = {
+      get: "/snowflake/generate"
+    };
+  }
+}
+
+message GenerateRequest {}
+
+message GenerateResponse {
+  int64 id = 1;
+}
