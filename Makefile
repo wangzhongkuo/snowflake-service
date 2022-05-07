@@ -85,7 +85,7 @@ PROTOC_INSTALLED_DIR := .protoc
 PROTOC_ZIP := /tmp/protoc-$(PROTOC_VERSION).zip
 PROTO_PATH := ./proto
 PROTO_OUTPUT := $(PROTO_PATH)
-PROTO_FILES := $(shell find $(PROTO_PATH)/snowflake -name '*.proto')
+PROTO_FILES := $(shell find $(PROTO_PATH) -name '*.proto')
 PROTOC_BIN := $(PROTOC_INSTALLED_DIR)/bin/protoc
 CURRENT_PROTOC_VERSION := $(shell $(PROTOC_BIN) --version 2>&1 | awk '{print $$2}')
 PROTOC_DOWNLOAD_URL := https://s3.shiyou.kingsoft.com/software/protobuf/$(PROTOC_VERSION)/protoc-$(PROTOC_VERSION)-$(THIS_OS)-$(THIS_ARCH).zip
@@ -155,13 +155,13 @@ go-lint:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v$(GOLANG_CI_LINTER_VERSION)
 
 ##@ Code
-PROTO_FILES=./proto/snowflake/snowflake.proto
 .PHONY: generate
 generate: ## Generate proto files, mock files
-	@protoc -I ./proto \
+	@(PROTOC_BIN) \
+		--proto_path=$(PROTOC_INSTALLED_DIR)/include \
+		--proto_path=$(PROTO_PATH) \
 		--go_out=$(PROTO_OUTPUT) --go_opt=paths=source_relative \
 		--go-grpc_out=$(PROTO_OUTPUT) --go-grpc_opt=require_unimplemented_servers=false --go-grpc_opt=paths=source_relative \
-		--grpc-gateway_out ./proto --grpc-gateway_opt=paths=source_relative \
 		$(PROTO_FILES)
 	@echo "Finished."
 

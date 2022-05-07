@@ -1,0 +1,13 @@
+syntax = "proto3";
+package seayoo.snowflake;
+option go_package = "git.shiyou.kingsoft.com/sdk/snowflake-service;snowflake";
+
+service Snowflake {
+  rpc NextId (NextIdRequest) returns (NextIdResponse) {}
+}
+
+message NextIdRequest {}
+
+message NextIdResponse {
+  fixed64 id = 1;
+}

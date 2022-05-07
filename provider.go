@@ -15,15 +15,18 @@ var consulProvider *ConsulProvider
 
 type Provider interface {
 	GetWorkerId() (int64, error)
+	Stop()
 }
 
 type SimpleProvider struct {
 	workerId int64
 }
 
+func (p *SimpleProvider) Stop() {}
+
 func getSimpleProvider(workerId int64) *SimpleProvider {
 	if workerId < 0 || workerId > maxWorkerId {
-		panic(fmt.Sprintf("workerId must beetwen 0 and %d", maxWorkerId))
+		log.Fatalf("workerId must between 0 and %d", maxWorkerId)
 	}
 	once.Do(func() {
 		simpleProvider = &SimpleProvider{
@@ -37,16 +40,17 @@ func (p *SimpleProvider) GetWorkerId() (int64, error) {
 	return p.workerId, nil
 }
 
-func getConsulProvider(Address string, keyPrefix string) *ConsulProvider {
+func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64) *ConsulProvider {
 	once.Do(func() {
 		leaderCh := make(chan struct{}, 1)
 		leaderCh <- struct{}{} // used by start
 		consulProvider = &ConsulProvider{
-			Address:   Address,
-			keyPrefix: keyPrefix,
-			stopCh:    make(<-chan struct{}),
-			leaderCh:  leaderCh,
-			state:     unavailable,
+			Address:      Address,
+			keyPrefix:    keyPrefix,
+			hintWorkerId: hintWorkerId,
+			leaderCh:     leaderCh,
+			stopCh:       make(chan struct{}, 1),
+			state:        unavailable,
 		}
 		go consulProvider.start()
 	})
@@ -62,12 +66,14 @@ const (
 
 type ConsulProvider struct {
 	sync.Mutex
-	Address   string
-	leaderCh  <-chan struct{}
-	workerId  int64
-	keyPrefix string
-	stopCh    <-chan struct{}
-	state     state
+	Address      string
+	lock         *api.Lock
+	leaderCh     <-chan struct{}
+	stopCh       chan struct{}
+	hintWorkerId int64
+	workerId     int64
+	keyPrefix    string
+	state        state
 }
 
 func (p *ConsulProvider) GetWorkerId() (int64, error) {
@@ -86,8 +92,11 @@ func (p *ConsulProvider) start() {
 			config := api.DefaultConfig()
 			config.Address = p.Address
 			c, _ := api.NewClient(config)
-			var workerId int64
-			for ; workerId <= maxWorkerId; workerId++ {
+			workerId := roundPre(p.hintWorkerId, maxWorkerId)
+			var i int64
+			for i = 0; i <= maxWorkerId; i++ {
+				workerId = roundNext(workerId, maxWorkerId)
+				log.Printf("start accquire worker id: %d", workerId)
 				lockOptions := &api.LockOptions{
 					Key:          p.keyPrefix + strconv.FormatInt(workerId, 10),
 					LockTryOnce:  true,
@@ -99,9 +108,11 @@ func (p *ConsulProvider) start() {
 					p.leaderCh = ch
 					p.workerId = workerId
 					p.state = available
+					p.lock = lock
+					log.Printf("accquire worker id success: %d", workerId)
 					break
 				} else {
-					log.Println("create lock error", err)
+					log.Printf("accquire worker id %d error %v", workerId, err)
 					if workerId == maxWorkerId {
 						leaderCh := make(chan struct{}, 1)
 						leaderCh <- struct{}{}
@@ -112,4 +123,30 @@ func (p *ConsulProvider) start() {
 			}
 		}
 	}
+}
+
+func (p *ConsulProvider) Stop() {
+	log.Printf("ConsulProvider stop, release worker id: %d", p.workerId)
+	p.stopCh <- struct{}{}
+	p.lock.Unlock()
+}
+
+// roundNext get the next value with round-robin algorithm
+// Note: contains zero, e.g. pos = 3, max = 5, the result will be [4, 5, 0, 1, 2, 3, 4, 5, 0...]
+func roundNext(pos, max int64) int64 {
+	next := pos + 1
+	if next > max {
+		return 0
+	}
+	return next
+}
+
+// roundPre get the previous value with reverse-round-robin algorithm
+// Note: contains zero, e.g. pos = 3, max = 5, the result will be [2, 1, 0, 5, 4, 3, 2, 1, 0...]
+func roundPre(pos, max int64) int64 {
+	pre := pos - 1
+	if pre < 0 {
+		return max
+	}
+	return pre
 }

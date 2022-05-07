@@ -3,53 +3,58 @@ package main
 import (
 	"context"
 	"flag"
-	snowflakepb "git.shiyou.kingsoft.com/sdk/snowflake-service/proto/snowflake"
+	"fmt"
+	"git.shiyou.kingsoft.com/go/graceful"
+	snowflakepb "git.shiyou.kingsoft.com/sdk/snowflake-service/proto"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"log"
 	"net"
 	"net/http"
+	"time"
 )
 
 var (
-	rpcPort         string
-	httpPort        string
+	host            string
+	grpcPort        uint64
+	metricsPort     uint64
 	provider        string
 	consulAddress   string
 	consulKeyPrefix string
-	workerId        int64
+	hintWorkerId    uint64
+	workerId        uint64
 )
 
 func main() {
 	// ======================= parse program arguments ============================
-	flag.StringVar(&rpcPort, "rpc_port", "8080", "gGPC listen port")
-	flag.StringVar(&httpPort, "http_port", "8090", "http listen port")
-	flag.StringVar(&provider, "provider", "consul", "what provider to get the snowflake worker id:[simple, consul], default is consul")
-	flag.StringVar(&consulAddress, "consul_address", "localhost:8500", "address to the consul")
-	flag.StringVar(&consulKeyPrefix, "consul_key_prefix", "snowflake/worker/id/", "consul kv prefix")
-	flag.Int64Var(&workerId, "worker_id", 0, "specify a worker id to the simple provider")
+	flag.StringVar(&host, "host", "0.0.0.0", "Which host the server listening on")
+	flag.Uint64Var(&grpcPort, "rpc-port", 8080, "gRPC listen port")
+	flag.Uint64Var(&metricsPort, "metrics-port", 8090, "/metrics http endpoint listen port")
+	flag.StringVar(&provider, "provider", "consul", "What provider to get the snowflake worker id:[simple, consul], default is consul")
+	flag.StringVar(&consulAddress, "consul-address", "localhost:8500", "Address to the consul")
+	flag.StringVar(&consulKeyPrefix, "consul-key-prefix", "snowflake/worker/id/", "Consul kv prefix")
+	flag.Uint64Var(&hintWorkerId, "hint-worker-id", 0, "Acquire worker id start with the hint worker id")
+	flag.Uint64Var(&workerId, "worker-id", 0, "Specify a worker id to the simple provider")
 	flag.Parse()
 
 	// =========================== init snowflake =================================
 	var p Provider
 	if provider == "simple" {
-		p = getSimpleProvider(workerId)
+		p = getSimpleProvider(int64(workerId))
 	} else {
-		p = getConsulProvider(consulAddress, consulKeyPrefix)
+		p = getConsulProvider(consulAddress, consulKeyPrefix, int64(hintWorkerId))
 	}
 	initSnowflake(p)
 
 	// =========================== init gRPC server =================================
 	// Create a listener on TCP port
-	lis, err := net.Listen("tcp", ":"+rpcPort)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
-		log.Fatalln("Failed to listen:", err)
+		log.Panicf("Failed to listen: %v", err)
 	}
 	// Create a gRPC server object
 	recovery_opts := []grpc_recovery.Option{
@@ -66,37 +71,34 @@ func main() {
 	snowflakepb.RegisterSnowflakeServer(s, &Server{})
 	grpc_prometheus.Register(s)
 	// Serve gRPC server
-	log.Println("Serving gRPC on 0.0.0.0:" + rpcPort)
+	log.Printf("Serving gRPC on %s:%d", host, grpcPort)
 	go func() {
-		log.Fatalln(s.Serve(lis))
+		if err := s.Serve(lis); err != nil {
+			log.Panicf("failed to serve: %s", err)
+		}
 	}()
 
-	// =========================== init http server =================================
-	// Create a client connection to the gRPC server we just started
-	// This is where the gRPC-Gateway proxies the requests
-	conn, err := grpc.DialContext(
+	// ======================= init metrics endpoint http server ====================
+	// The Handler function provides a default handler to expose metrics
+	// via an HTTP server. "/metrics" is the usual endpoint for that.
+	http.Handle("/metrics", promhttp.Handler())
+	// Start your http server for prometheus.
+	go func() {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", metricsPort), nil); err != nil {
+			log.Panicf("unable to start a http server.")
+		}
+	}()
+	log.Printf("metrics server listening at %d", metricsPort)
+	shutdown := graceful.Shutdown(
 		context.Background(),
-		"0.0.0.0:"+rpcPort,
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		15*time.Second,
+		[]graceful.Operation{
+			func(ctx context.Context) {
+				p.Stop()
+				s.GracefulStop()
+			},
+		},
 	)
-	if err != nil {
-		log.Fatalln("Failed to dial server:", err)
-	}
-	gatewayMux := runtime.NewServeMux()
-
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	mux.Handle("/", gatewayMux)
-
-	err = snowflakepb.RegisterSnowflakeHandler(context.Background(), gatewayMux, conn)
-	if err != nil {
-		log.Fatalln("Failed to register gateway:", err)
-	}
-	gwServer := &http.Server{
-		Addr:    ":" + httpPort,
-		Handler: mux,
-	}
-	log.Println("Serving gRPC-Gateway on http://0.0.0.0:" + httpPort)
-	log.Fatalln(gwServer.ListenAndServe())
+	<-shutdown
+	log.Println("Good bye ...")
 }

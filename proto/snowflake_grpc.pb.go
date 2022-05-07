@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.19.4
-// source: snowflake/snowflake.proto
+// source: snowflake.proto
 
 package snowflake
 
@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SnowflakeClient interface {
-	Generate(ctx context.Context, in *GenerateRequest, opts ...grpc.CallOption) (*GenerateResponse, error)
+	NextId(ctx context.Context, in *NextIdRequest, opts ...grpc.CallOption) (*NextIdResponse, error)
 }
 
 type snowflakeClient struct {
@@ -33,9 +33,9 @@ func NewSnowflakeClient(cc grpc.ClientConnInterface) SnowflakeClient {
 	return &snowflakeClient{cc}
 }
 
-func (c *snowflakeClient) Generate(ctx context.Context, in *GenerateRequest, opts ...grpc.CallOption) (*GenerateResponse, error) {
-	out := new(GenerateResponse)
-	err := c.cc.Invoke(ctx, "/seayoo.snowflake.Snowflake/Generate", in, out, opts...)
+func (c *snowflakeClient) NextId(ctx context.Context, in *NextIdRequest, opts ...grpc.CallOption) (*NextIdResponse, error) {
+	out := new(NextIdResponse)
+	err := c.cc.Invoke(ctx, "/seayoo.snowflake.Snowflake/NextId", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,15 +46,15 @@ func (c *snowflakeClient) Generate(ctx context.Context, in *GenerateRequest, opt
 // All implementations should embed UnimplementedSnowflakeServer
 // for forward compatibility
 type SnowflakeServer interface {
-	Generate(context.Context, *GenerateRequest) (*GenerateResponse, error)
+	NextId(context.Context, *NextIdRequest) (*NextIdResponse, error)
 }
 
 // UnimplementedSnowflakeServer should be embedded to have forward compatible implementations.
 type UnimplementedSnowflakeServer struct {
 }
 
-func (UnimplementedSnowflakeServer) Generate(context.Context, *GenerateRequest) (*GenerateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Generate not implemented")
+func (UnimplementedSnowflakeServer) NextId(context.Context, *NextIdRequest) (*NextIdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NextId not implemented")
 }
 
 // UnsafeSnowflakeServer may be embedded to opt out of forward compatibility for this service.
@@ -68,20 +68,20 @@ func RegisterSnowflakeServer(s grpc.ServiceRegistrar, srv SnowflakeServer) {
 	s.RegisterService(&Snowflake_ServiceDesc, srv)
 }
 
-func _Snowflake_Generate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GenerateRequest)
+func _Snowflake_NextId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NextIdRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SnowflakeServer).Generate(ctx, in)
+		return srv.(SnowflakeServer).NextId(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/seayoo.snowflake.Snowflake/Generate",
+		FullMethod: "/seayoo.snowflake.Snowflake/NextId",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SnowflakeServer).Generate(ctx, req.(*GenerateRequest))
+		return srv.(SnowflakeServer).NextId(ctx, req.(*NextIdRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -94,10 +94,10 @@ var Snowflake_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*SnowflakeServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Generate",
-			Handler:    _Snowflake_Generate_Handler,
+			MethodName: "NextId",
+			Handler:    _Snowflake_NextId_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "snowflake/snowflake.proto",
+	Metadata: "snowflake.proto",
 }
