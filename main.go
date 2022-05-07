@@ -52,7 +52,7 @@ func main() {
 
 	// =========================== init gRPC server =================================
 	// Create a listener on TCP port
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, grpcPort))
 	if err != nil {
 		log.Panicf("Failed to listen: %v", err)
 	}
