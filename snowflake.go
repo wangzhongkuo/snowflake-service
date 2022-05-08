@@ -27,10 +27,10 @@ type Snowflake struct {
 }
 
 const (
-	epoch             = int64(1577808000000)                           // 设置起始时间(时间戳/毫秒)：2020-01-01 00:00:00，有效期69年
+	epoch             = int64(1640966400000)                           // 设置起始时间(时间戳/毫秒)：2020-01-01 00:00:00，有效期69年
 	timestampBits     = uint(41)                                       // 时间戳占用位数
 	datacenterIdBits  = uint(2)                                        // 数据中心id所占位数
-	workerIdBits      = uint(7)                                        // 机器id所占位数
+	workerIdBits      = uint(8)                                        // 机器id所占位数
 	sequenceBits      = uint(12)                                       // 序列所占的位数
 	timestampMax      = int64(-1 ^ (-1 << timestampBits))              // 时间戳最大值
 	maxDatacenterId   = int64(-1 ^ (-1 << datacenterIdBits))           // 支持的最大数据中心id数量
@@ -44,7 +44,7 @@ const (
 func (s *Snowflake) NextId() int64 {
 	s.Lock()
 	defer s.Unlock()
-	now := time.Now().UnixNano() / 1000000 // 转毫秒
+	now := time.Now().UnixMilli()
 	if s.timestamp == now {
 		// 当同一时间戳（精度：毫秒）下多次生成id会增加序列号
 		s.sequence = (s.sequence + 1) & sequenceMask
@@ -52,7 +52,7 @@ func (s *Snowflake) NextId() int64 {
 			// 如果当前序列超出12bit长度，则需要等待下一毫秒
 			// 下一毫秒将使用sequence:0
 			for now <= s.timestamp {
-				now = time.Now().UnixNano() / 1000000
+				now = time.Now().UnixMilli()
 			}
 		}
 	} else {
@@ -61,7 +61,6 @@ func (s *Snowflake) NextId() int64 {
 	}
 	t := now - epoch
 	if t > timestampMax {
-		s.Unlock()
 		log.Printf("epoch must be between 0 and %d\n", timestampMax-1)
 		return 0
 	}
