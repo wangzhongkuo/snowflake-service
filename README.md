@@ -51,8 +51,7 @@ func TestSnowflake_NextId(t *testing.T) {
 - snowflake-service生成的ID是多少位的数字：雪花算法生成的ID位数并不固定，随着时间的推移ID的增长位数也会随之增长，目前是17位（2022-05-08）
 - snowflake-service生成的ID是连续的吗：不是，snowflake-service生成的ID是非连续、根据时间单调递增的。
 - 如果时钟回拨了snowflake-service是怎样处理的：目前snowflake-service并没有处理时钟回拨的问题，后续版本会考虑增强这方面的能力。
-- snowflake-service的并发能力怎么样：单个snowflake-service进程处理NextId()请求时是加互斥锁处理了，也就是串行处理，使用者可以根据
-自己业务量的情况来增加snowflake-service实例数来提高并发能力，后续版本会针对并发能力进行改进。
+- snowflake-service的并发能力怎么样：单个snowflake-service进程处理NextId()请求时是加互斥锁处理了，也就是串行处理，使用者可以根据自己业务量的情况来增加snowflake-service实例数来提高并发能力，后续版本会针对并发能力进行改进。
 
 # Reference
 - [Consul Session](https://www.consul.io/docs/dynamic-app-config/sessions)
