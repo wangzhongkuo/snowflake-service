@@ -49,7 +49,7 @@ func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64) *Co
 			keyPrefix:    keyPrefix,
 			hintWorkerId: hintWorkerId,
 			leaderCh:     leaderCh,
-			stopCh:       make(chan struct{}, 1),
+			stopCh:       make(chan struct{}),
 			state:        unavailable,
 		}
 		go consulProvider.start()
@@ -87,6 +87,8 @@ func (p *ConsulProvider) GetWorkerId() (int64, error) {
 func (p *ConsulProvider) start() {
 	for {
 		select {
+		case <-p.stopCh:
+			return
 		case <-p.leaderCh:
 			p.state = unavailable
 			config := api.DefaultConfig()
@@ -127,7 +129,7 @@ func (p *ConsulProvider) start() {
 
 func (p *ConsulProvider) Stop() {
 	log.Printf("ConsulProvider stop, release worker id: %d", p.workerId)
-	p.stopCh <- struct{}{}
+	close(p.stopCh)
 	p.lock.Unlock()
 }
 
