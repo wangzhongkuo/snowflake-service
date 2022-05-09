@@ -27,7 +27,7 @@ type Snowflake struct {
 }
 
 const (
-	epoch             = int64(1640966400000)                           // 设置起始时间(时间戳/毫秒)：2020-01-01 00:00:00，有效期69年
+	epoch             = int64(1640966400000)                           // 设置起始时间(时间戳/毫秒)：2022-01-01 00:00:00，可使用至2091年
 	timestampBits     = uint(41)                                       // 时间戳占用位数
 	datacenterIdBits  = uint(2)                                        // 数据中心id所占位数
 	workerIdBits      = uint(8)                                        // 机器id所占位数
