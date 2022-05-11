@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,17 +41,23 @@ func (p *SimpleProvider) GetWorkerId() (int64, error) {
 	return p.workerId, nil
 }
 
-func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64) *ConsulProvider {
+func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64, enableSelfPreservation bool) *ConsulProvider {
 	once.Do(func() {
 		leaderCh := make(chan struct{}, 1)
 		leaderCh <- struct{}{} // used by start
+		workerId := atomic.Value{}
+		workerId.Store(hintWorkerId)
+		state := atomic.Value{}
+		state.Store(unavailable)
 		consulProvider = &ConsulProvider{
-			Address:      Address,
-			keyPrefix:    keyPrefix,
-			hintWorkerId: hintWorkerId,
-			leaderCh:     leaderCh,
-			stopCh:       make(chan struct{}),
-			state:        unavailable,
+			Address:                Address,
+			keyPrefix:              keyPrefix,
+			hintWorkerId:           hintWorkerId,
+			workerId:               workerId,
+			leaderCh:               leaderCh,
+			stopCh:                 make(chan struct{}),
+			state:                  state,
+			enableSelfPreservation: enableSelfPreservation,
 		}
 		go consulProvider.start()
 	})
@@ -66,22 +73,29 @@ const (
 
 type ConsulProvider struct {
 	sync.Mutex
-	Address      string
-	lock         *api.Lock
-	leaderCh     <-chan struct{}
-	stopCh       chan struct{}
-	hintWorkerId int64
-	workerId     int64
-	keyPrefix    string
-	state        state
+	Address                string
+	lock                   *api.Lock
+	leaderCh               <-chan struct{}
+	stopCh                 chan struct{}
+	hintWorkerId           int64
+	workerId               atomic.Value
+	keyPrefix              string
+	state                  atomic.Value
+	enableSelfPreservation bool
 }
 
 func (p *ConsulProvider) GetWorkerId() (int64, error) {
-	if p.state == unavailable {
-		return 0, fmt.Errorf("consulProvider is unavailable")
-	} else {
-		return p.workerId, nil
+	if p.state.Load() == unavailable {
+		if !p.enableSelfPreservation {
+			log.Printf("Fatal: enable-self-preservation=%v, consul provider is unavailable!!!", p.enableSelfPreservation)
+			return 0, fmt.Errorf("consulProvider is unavailable")
+		} else {
+			workerId := p.workerId.Load().(int64)
+			log.Printf("Warnning: enable-self-preservation=%v, consul provider is unavailable, use worker id: %d", p.enableSelfPreservation, workerId)
+			return workerId, nil
+		}
 	}
+	return p.workerId.Load().(int64), nil
 }
 
 func (p *ConsulProvider) start() {
@@ -90,11 +104,11 @@ func (p *ConsulProvider) start() {
 		case <-p.stopCh:
 			return
 		case <-p.leaderCh:
-			p.state = unavailable
+			p.state.Store(unavailable)
 			config := api.DefaultConfig()
 			config.Address = p.Address
 			c, _ := api.NewClient(config)
-			workerId := roundPre(p.hintWorkerId, maxWorkerId)
+			workerId := roundPre(p.workerId.Load().(int64), maxWorkerId)
 			var i int64
 			for i = 0; i <= maxWorkerId; i++ {
 				workerId = roundNext(workerId, maxWorkerId)
@@ -108,8 +122,8 @@ func (p *ConsulProvider) start() {
 				ch, err := lock.Lock(p.stopCh)
 				if ch != nil && err == nil {
 					p.leaderCh = ch
-					p.workerId = workerId
-					p.state = available
+					p.workerId.Store(workerId)
+					p.state.Store(available)
 					p.lock = lock
 					log.Printf("accquire worker id success: %d", workerId)
 					break

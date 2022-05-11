@@ -19,14 +19,15 @@ import (
 )
 
 var (
-	host            string
-	grpcPort        uint64
-	metricsPort     uint64
-	provider        string
-	consulAddress   string
-	consulKeyPrefix string
-	hintWorkerId    uint64
-	workerId        uint64
+	host                   string
+	grpcPort               uint64
+	metricsPort            uint64
+	provider               string
+	enableSelfPreservation bool
+	consulAddress          string
+	consulKeyPrefix        string
+	hintWorkerId           uint64
+	workerId               uint64
 )
 
 func main() {
@@ -35,6 +36,7 @@ func main() {
 	flag.Uint64Var(&grpcPort, "rpc-port", 8080, "gRPC listen port")
 	flag.Uint64Var(&metricsPort, "metrics-port", 8090, "/metrics http endpoint listen port")
 	flag.StringVar(&provider, "provider", "consul", "What provider to get the snowflake worker id:[simple, consul], default is consul")
+	flag.BoolVar(&enableSelfPreservation, "enable-self-preservation", true, "If the provider lost the worker id then use the latest available or the hint worker id")
 	flag.StringVar(&consulAddress, "consul-address", "localhost:8500", "Address to the consul")
 	flag.StringVar(&consulKeyPrefix, "consul-key-prefix", "snowflake/worker/id/", "Consul kv prefix")
 	flag.Uint64Var(&hintWorkerId, "hint-worker-id", 0, "Acquire worker id start with the hint worker id")
@@ -46,7 +48,7 @@ func main() {
 	if provider == "simple" {
 		p = getSimpleProvider(int64(workerId))
 	} else {
-		p = getConsulProvider(consulAddress, consulKeyPrefix, int64(hintWorkerId))
+		p = getConsulProvider(consulAddress, consulKeyPrefix, int64(hintWorkerId), enableSelfPreservation)
 	}
 	initSnowflake(p)
 
