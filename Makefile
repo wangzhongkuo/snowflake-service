@@ -157,7 +157,7 @@ go-lint:
 ##@ Code
 .PHONY: generate
 generate: ## Generate proto files, mock files
-	@(PROTOC_BIN) \
+	@$(PROTOC_BIN) \
 		--proto_path=$(PROTOC_INSTALLED_DIR)/include \
 		--proto_path=$(PROTO_PATH) \
 		--go_out=$(PROTO_OUTPUT) --go_opt=paths=source_relative \
