@@ -142,6 +142,11 @@ func (p *ConsulProvider) start() {
 }
 
 func (p *ConsulProvider) Stop() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("stop consul provider err: ", err)
+		}
+	}()
 	log.Printf("ConsulProvider stop, release worker id: %d", p.workerId)
 	close(p.stopCh)
 	p.lock.Unlock()

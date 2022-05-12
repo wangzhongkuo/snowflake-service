@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	snowflakepb "git.shiyou.kingsoft.com/sdk/snowflake-service/proto"
+	snowflakepb "git.shiyou.kingsoft.com/infra/snowflake-service/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

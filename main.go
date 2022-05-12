@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"git.shiyou.kingsoft.com/go/graceful"
-	snowflakepb "git.shiyou.kingsoft.com/sdk/snowflake-service/proto"
+	snowflakepb "git.shiyou.kingsoft.com/infra/snowflake-service/proto"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
