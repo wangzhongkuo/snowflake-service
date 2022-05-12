@@ -1,4 +1,4 @@
-module git.shiyou.kingsoft.com/sdk/snowflake-service
+module git.shiyou.kingsoft.com/infra/snowflake-service
 
 go 1.18
 

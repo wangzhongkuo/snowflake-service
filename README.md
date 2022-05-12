@@ -30,7 +30,7 @@ ConsulProvider也是默认设置。
 ```go
 import (
 	"context"
-	pb "git.shiyou.kingsoft.com/sdk/snowflake-service/proto"
+	pb "git.shiyou.kingsoft.com/infra/snowflake-service/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"testing"
