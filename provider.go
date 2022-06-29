@@ -42,6 +42,10 @@ func (p *SimpleProvider) GetWorkerId() (int64, error) {
 }
 
 func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64, enableSelfPreservation bool) *ConsulProvider {
+	if hintWorkerId < 0 || hintWorkerId > maxWorkerId {
+		log.Printf("hint-worker-id must between 0 and %d, use default 0\n", maxWorkerId)
+		hintWorkerId = 0
+	}
 	once.Do(func() {
 		leaderCh := make(chan struct{}, 1)
 		leaderCh <- struct{}{} // used by start
@@ -52,7 +56,6 @@ func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64, ena
 		consulProvider = &ConsulProvider{
 			Address:                Address,
 			keyPrefix:              keyPrefix,
-			hintWorkerId:           hintWorkerId,
 			workerId:               workerId,
 			leaderCh:               leaderCh,
 			stopCh:                 make(chan struct{}),
@@ -77,7 +80,6 @@ type ConsulProvider struct {
 	lock                   *api.Lock
 	leaderCh               <-chan struct{}
 	stopCh                 chan struct{}
-	hintWorkerId           int64
 	workerId               atomic.Value
 	keyPrefix              string
 	state                  atomic.Value
