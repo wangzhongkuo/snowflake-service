@@ -53,14 +53,20 @@ func getConsulProvider(address string, keyPrefix string, hintWorkerId int64, ena
 		workerId.Store(hintWorkerId)
 		state := atomic.Value{}
 		state.Store(unavailable)
+		config := api.DefaultConfig()
+		config.Address = address
+		c, err := api.NewClient(config)
+		if err != nil {
+			log.Fatalf("New consul api client error: %v", err)
+		}
 		consulProvider = &ConsulProvider{
-			Address:                address,
 			keyPrefix:              keyPrefix,
 			workerId:               workerId,
 			leaderCh:               leaderCh,
 			stopCh:                 make(chan struct{}),
 			state:                  state,
 			enableSelfPreservation: enableSelfPreservation,
+			consul:                 c,
 		}
 		go consulProvider.start()
 	})
@@ -76,7 +82,6 @@ const (
 
 type ConsulProvider struct {
 	sync.Mutex
-	Address                string
 	lock                   *api.Lock
 	leaderCh               <-chan struct{}
 	stopCh                 chan struct{}
@@ -84,6 +89,7 @@ type ConsulProvider struct {
 	keyPrefix              string
 	state                  atomic.Value
 	enableSelfPreservation bool
+	consul                 *api.Client
 }
 
 func (p *ConsulProvider) GetWorkerId() (int64, error) {
@@ -107,9 +113,6 @@ func (p *ConsulProvider) start() {
 			return
 		case <-p.leaderCh:
 			p.state.Store(unavailable)
-			config := api.DefaultConfig()
-			config.Address = p.Address
-			c, _ := api.NewClient(config)
 			workerId := roundPre(p.workerId.Load().(int64), maxWorkerId)
 			var i int64
 			for i = 0; i <= maxWorkerId; i++ {
@@ -120,7 +123,7 @@ func (p *ConsulProvider) start() {
 					LockTryOnce:  true,
 					LockWaitTime: time.Millisecond,
 				}
-				lock, _ := c.LockOpts(lockOptions)
+				lock, _ := p.consul.LockOpts(lockOptions)
 				ch, err := lock.Lock(p.stopCh)
 				if ch != nil && err == nil {
 					p.leaderCh = ch
