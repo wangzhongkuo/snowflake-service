@@ -41,7 +41,7 @@ func (p *SimpleProvider) GetWorkerId() (int64, error) {
 	return p.workerId, nil
 }
 
-func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64, enableSelfPreservation bool) *ConsulProvider {
+func getConsulProvider(address string, keyPrefix string, hintWorkerId int64, enableSelfPreservation bool) *ConsulProvider {
 	if hintWorkerId < 0 || hintWorkerId > maxWorkerId {
 		log.Printf("hint-worker-id must between 0 and %d, use default 0\n", maxWorkerId)
 		hintWorkerId = 0
@@ -54,7 +54,7 @@ func getConsulProvider(Address string, keyPrefix string, hintWorkerId int64, ena
 		state := atomic.Value{}
 		state.Store(unavailable)
 		consulProvider = &ConsulProvider{
-			Address:                Address,
+			Address:                address,
 			keyPrefix:              keyPrefix,
 			workerId:               workerId,
 			leaderCh:               leaderCh,
